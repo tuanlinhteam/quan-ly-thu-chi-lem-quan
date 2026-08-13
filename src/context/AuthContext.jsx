@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }) => {
     isManager: role === 'MANAGER',
     canAddTransaction: role === 'ADMIN' || role === 'MANAGER',
     canEditTransaction: role === 'ADMIN' || role === 'MANAGER',
-    canDeleteTransaction: role === 'ADMIN',
+    canDeleteTransaction: role === 'ADMIN' || role === 'MANAGER',
     canManageUsers: role === 'ADMIN',
     canManageSettings: role === 'ADMIN',
     canAccessFinancialReports: role === 'ADMIN',
