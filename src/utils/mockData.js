@@ -4,7 +4,7 @@ export const DEFAULT_USERS = [
     id: 'usr_1',
     username: 'admin',
     password: 'admin123',
-    name: 'Nguyễn Văn Quản Trị (Admin)',
+    name: 'admin',
     role: 'ADMIN',
     roleLabel: 'Quản Trị Viên (Full Quyền)',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AdminLem'
@@ -13,7 +13,7 @@ export const DEFAULT_USERS = [
     id: 'usr_2',
     username: 'Quanly',
     password: '123123',
-    name: 'Trần Thị Quản Lý',
+    name: 'Quản Lý',
     role: 'MANAGER',
     roleLabel: 'Quản Lý Thu Chi & Kho',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ManagerLem'

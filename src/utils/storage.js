@@ -5,7 +5,7 @@ const KEYS = {
   INVENTORY: 'lem_quan_inventory_v1',
   SETTINGS: 'lem_quan_settings_v1',
   USERS: 'lem_quan_users_v1',
-  CURRENT_USER: 'lem_quan_current_user_v2' // Bumped key to force global logout across all devices!
+  CURRENT_USER: 'lem_quan_current_user_v3' // Bumped to force reload new account names
 };
 
 // Helper format VND currency
