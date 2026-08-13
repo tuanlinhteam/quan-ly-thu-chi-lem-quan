@@ -11,11 +11,12 @@ import { FinancialReports } from './components/FinancialReports';
 import { UserSettings } from './components/UserSettings';
 import { TransactionModal } from './components/TransactionModal';
 import { 
-  loadTransactions, 
+  initFirebaseData,
+  listenTransactions,
+  listenInventory,
+  listenSettings,
   saveTransactions, 
-  loadInventory, 
   saveInventory, 
-  loadSettings, 
   saveSettings,
   resetToFactoryDefaults 
 } from './utils/storage';
@@ -26,28 +27,42 @@ const DashboardApp = () => {
   // Primary Application State
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   
-  const [transactions, setTransactions] = useState(() => loadTransactions());
-  const [inventory, setInventory] = useState(() => loadInventory());
-  const [settings, setSettings] = useState(() => loadSettings());
+  const [transactions, setTransactions] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [settings, setSettings] = useState({});
 
   // Modal States
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-  // Sync state to localstorage
+  // Initialize Firebase data & subscribe to real-time updates
   useEffect(() => {
-    saveTransactions(transactions);
-  }, [transactions]);
+    initFirebaseData();
 
-  useEffect(() => {
-    saveInventory(inventory);
-  }, [inventory]);
+    // Real-time listeners — all devices see changes instantly!
+    const unsubTransactions = listenTransactions((data) => {
+      setTransactions(data);
+      setLoading(false);
+    });
 
-  useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
+    const unsubInventory = listenInventory((data) => {
+      setInventory(data);
+    });
+
+    const unsubSettings = listenSettings((data) => {
+      setSettings(data);
+    });
+
+    // Cleanup listeners on unmount
+    return () => {
+      unsubTransactions();
+      unsubInventory();
+      unsubSettings();
+    };
+  }, []);
 
   // Transaction Actions
   const handleSaveTransaction = (transactionData) => {
@@ -69,6 +84,7 @@ const DashboardApp = () => {
       }
     }
     setTransactions(updated);
+    saveTransactions(updated); // Save to Firebase
     setEditingTransaction(null);
   };
 
@@ -79,14 +95,17 @@ const DashboardApp = () => {
     }
     const updated = transactions.filter(t => t.id !== id);
     setTransactions(updated);
+    saveTransactions(updated); // Save to Firebase
   };
 
   const handleSaveInventory = (updatedInventory) => {
     setInventory(updatedInventory);
+    saveInventory(updatedInventory); // Save to Firebase
   };
 
   const handleUpdateSettings = (newSettings) => {
     setSettings(newSettings);
+    saveSettings(newSettings); // Save to Firebase
   };
 
   const handleOpenAddTransaction = () => {
@@ -101,6 +120,17 @@ const DashboardApp = () => {
 
   return (
     <div className="min-h-screen bg-ocean-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+      {/* Loading Overlay */}
+      {loading && (
+        <div className="fixed inset-0 z-[100] bg-ocean-950 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-amber-400 font-bold text-sm">Đang kết nối cơ sở dữ liệu...</p>
+            <p className="text-slate-500 text-xs mt-1">Firebase Realtime Database</p>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <Header 
         mobileMenuOpen={mobileMenuOpen}
