@@ -15,9 +15,62 @@ const KEYS = {
 //  across all devices in real-time
 // ═══════════════════════════════════════════
 
+// Migrate old localStorage data to Firebase (one-time)
+const migrateLocalStorageToFirebase = async () => {
+  const MIGRATED_KEY = 'lem_quan_firebase_migrated_v1';
+  if (localStorage.getItem(MIGRATED_KEY)) return; // Already migrated
+
+  try {
+    // Check if there's old transaction data in localStorage
+    const oldTransactions = localStorage.getItem(KEYS.TRANSACTIONS);
+    if (oldTransactions) {
+      const parsed = JSON.parse(oldTransactions);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firebaseTransactions = await dbGet('transactions');
+        // Only migrate if Firebase is empty
+        if (!firebaseTransactions || (Array.isArray(firebaseTransactions) && firebaseTransactions.length === 0)) {
+          await dbSet('transactions', parsed);
+          console.log(`✅ Migrated ${parsed.length} transactions from localStorage to Firebase`);
+        }
+      }
+    }
+
+    // Migrate inventory
+    const oldInventory = localStorage.getItem(KEYS.INVENTORY);
+    if (oldInventory) {
+      const parsed = JSON.parse(oldInventory);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firebaseInventory = await dbGet('inventory');
+        if (!firebaseInventory || (Array.isArray(firebaseInventory) && firebaseInventory.length === 0)) {
+          await dbSet('inventory', parsed);
+          console.log(`✅ Migrated ${parsed.length} inventory items from localStorage to Firebase`);
+        }
+      }
+    }
+
+    // Migrate settings
+    const oldSettings = localStorage.getItem(KEYS.SETTINGS);
+    if (oldSettings) {
+      const parsed = JSON.parse(oldSettings);
+      if (parsed && parsed.restaurantName) {
+        await dbSet('settings', parsed);
+        console.log('✅ Migrated settings from localStorage to Firebase');
+      }
+    }
+
+    localStorage.setItem(MIGRATED_KEY, 'true');
+    console.log('✅ localStorage → Firebase migration complete');
+  } catch (err) {
+    console.error('Migration error:', err);
+  }
+};
+
 // Initialize Firebase with default data if empty
 export const initFirebaseData = async () => {
   try {
+    // First, migrate any old localStorage data
+    await migrateLocalStorageToFirebase();
+
     const transactions = await dbGet('transactions');
     if (transactions === null) {
       await dbSet('transactions', []);
