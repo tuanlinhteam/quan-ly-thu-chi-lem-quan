@@ -23,7 +23,7 @@ export const formatDateVN = (dateString) => {
   if (!dateString) return '';
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return dateString;
-  return new Intl.NumberFormat('vi-VN', {
+  return new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric'

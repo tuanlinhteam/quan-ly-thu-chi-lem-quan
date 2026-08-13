@@ -256,8 +256,8 @@ export const IncomeExpenseLedger = ({
 
                       {/* Date & Time */}
                       <td className="py-3.5 px-4 whitespace-nowrap font-medium text-slate-200">
-                        <div>{formatDateVN(t.date)}</div>
-                        <div className="text-[10px] text-slate-400">{t.time || '12:00'}</div>
+                        <div className="text-sm">{formatDateVN(t.date)}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{t.time || '—'}</div>
                       </td>
 
                       {/* Category */}
