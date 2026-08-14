@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { formatVND, formatDateVN } from '../utils/storage';
+import { formatVND, formatDateVN, getTodayString } from '../utils/storage';
 import { TRANSACTION_CATEGORIES } from '../utils/mockData';
 import { 
   TrendingUp, 
@@ -15,7 +15,10 @@ import {
   Sparkles,
   PlusCircle,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  CalendarDays,
+  Filter,
+  X
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -37,13 +40,16 @@ export const DashboardOverview = ({
   onOpenAddTransaction, 
   onNavigateToLedger 
 }) => {
-  const [dateFilter, setDateFilter] = useState('ALL'); // 'TODAY', 'WEEK', 'MONTH', 'ALL'
+  const [dateFilter, setDateFilter] = useState('ALL'); // 'TODAY', 'WEEK', 'MONTH', 'SINGLE_DATE', 'CUSTOM_RANGE', 'ALL'
+  const [singleDate, setSingleDate] = useState(getTodayString());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Filter transactions based on date filter
   const filteredTransactions = useMemo(() => {
     if (dateFilter === 'ALL') return transactions;
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = getTodayString();
 
     return transactions.filter(t => {
       if (!t.date) return false;
@@ -59,9 +65,17 @@ export const DashboardOverview = ({
       if (dateFilter === 'MONTH') {
         return t.date.startsWith(now.toISOString().slice(0, 7));
       }
+      if (dateFilter === 'SINGLE_DATE') {
+        return t.date === (singleDate || todayStr);
+      }
+      if (dateFilter === 'CUSTOM_RANGE') {
+        if (startDate && t.date < startDate) return false;
+        if (endDate && t.date > endDate) return false;
+        return true;
+      }
       return true;
     });
-  }, [transactions, dateFilter]);
+  }, [transactions, dateFilter, singleDate, startDate, endDate]);
 
   // Aggregate Metrics
   const summary = useMemo(() => {
@@ -108,8 +122,12 @@ export const DashboardOverview = ({
       }
     });
 
-    return Object.values(map).slice(-7); // Take last 7 days for clean display
-  }, [filteredTransactions]);
+    const list = Object.values(map);
+    if (dateFilter === 'ALL' && list.length > 14) {
+      return list.slice(-14);
+    }
+    return list.length > 0 ? list : [{ date: 'Không có dữ liệu', Thu: 0, Chi: 0 }];
+  }, [filteredTransactions, dateFilter]);
 
   // Prepare Donut Chart Data (Expense by category)
   const expensePieData = useMemo(() => {
@@ -137,7 +155,7 @@ export const DashboardOverview = ({
   return (
     <div className="space-y-6 animate-slide-up">
       {/* Top Banner & Filter Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 glass-panel p-5 rounded-3xl border border-amber-500/20">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 glass-panel p-5 rounded-3xl border border-amber-500/20">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black font-heading gold-gradient-text">
@@ -153,11 +171,13 @@ export const DashboardOverview = ({
         </div>
 
         {/* Date Filter Pills */}
-        <div className="flex items-center gap-1.5 bg-ocean-900 p-1.5 rounded-2xl border border-slate-800 self-start md:self-auto">
+        <div className="flex flex-wrap items-center gap-1.5 bg-ocean-900 p-1.5 rounded-2xl border border-slate-800 self-start lg:self-auto">
           {[
             { id: 'TODAY', label: 'Hôm nay' },
             { id: 'WEEK', label: '7 Ngày qua' },
             { id: 'MONTH', label: 'Tháng này' },
+            { id: 'SINGLE_DATE', label: 'Xem 1 ngày 📅' },
+            { id: 'CUSTOM_RANGE', label: 'Khoảng ngày 📆' },
             { id: 'ALL', label: 'Tất cả' }
           ].map(f => (
             <button
@@ -174,6 +194,72 @@ export const DashboardOverview = ({
           ))}
         </div>
       </div>
+
+      {/* Sub-bar for Custom Single Date Selection */}
+      {dateFilter === 'SINGLE_DATE' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl glass-panel bg-ocean-900/90 border border-amber-500/30 text-xs animate-fade-in">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-amber-400 flex items-center gap-1.5">
+              <Calendar size={16} /> Chọn ngày xem tổng quan:
+            </span>
+            <input
+              type="date"
+              value={singleDate}
+              onChange={(e) => setSingleDate(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-ocean-950 border border-slate-700 text-amber-300 font-bold text-xs focus:border-amber-400 outline-none"
+            />
+          </div>
+          <div className="text-slate-400 font-medium flex items-center gap-2">
+            <span>
+              Đang hiển thị ngày <span className="text-amber-300 font-bold">{formatDateVN(singleDate || getTodayString())}</span>
+            </span>
+            <span className="bg-amber-500/10 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/20 font-bold">
+              {filteredTransactions.length} Giao dịch
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-bar for Custom Date Range Selection */}
+      {dateFilter === 'CUSTOM_RANGE' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl glass-panel bg-ocean-900/90 border border-amber-500/30 text-xs animate-fade-in">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-bold text-amber-400 flex items-center gap-1.5 mr-1">
+              <CalendarDays size={16} /> Lọc xem từ ngày đến ngày:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">Từ ngày</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="px-3 py-1.5 rounded-xl bg-ocean-950 border border-slate-700 text-amber-300 font-bold text-xs focus:border-amber-400 outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">đến ngày</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="px-3 py-1.5 rounded-xl bg-ocean-950 border border-slate-700 text-amber-300 font-bold text-xs focus:border-amber-400 outline-none"
+              />
+            </div>
+          </div>
+          <div className="text-slate-400 font-medium flex items-center gap-2">
+            <span>
+              {startDate || endDate ? (
+                <>Từ <span className="text-amber-300 font-bold">{startDate ? formatDateVN(startDate) : 'bắt đầu'}</span> đến <span className="text-amber-300 font-bold">{endDate ? formatDateVN(endDate) : 'hiện tại'}</span></>
+              ) : (
+                <>Vui lòng chọn khoảng ngày</>
+              )}
+            </span>
+            <span className="bg-amber-500/10 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/20 font-bold">
+              {filteredTransactions.length} Giao dịch
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 4 KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
