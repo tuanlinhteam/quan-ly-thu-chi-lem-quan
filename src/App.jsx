@@ -18,6 +18,7 @@ import {
   saveTransactions, 
   saveInventory, 
   saveSettings,
+  sortTransactionsByDateTime,
   resetToFactoryDefaults 
 } from './utils/storage';
 
@@ -44,7 +45,7 @@ const DashboardApp = () => {
 
     // Real-time listeners — all devices see changes instantly!
     const unsubTransactions = listenTransactions((data) => {
-      setTransactions(data);
+      setTransactions(sortTransactionsByDateTime(data));
       setLoading(false);
     });
 
@@ -67,11 +68,18 @@ const DashboardApp = () => {
   // Transaction Actions
   const handleSaveTransaction = (transactionData) => {
     const exists = transactions.some(t => t.id === transactionData.id);
+    const txWithTimestamp = {
+      ...transactionData,
+      updatedAt: Date.now()
+    };
+
     let updated;
     if (exists) {
-      updated = transactions.map(t => t.id === transactionData.id ? transactionData : t);
+      // User EDITED an existing transaction -> replace & mark updatedAt
+      updated = transactions.map(t => t.id === transactionData.id ? txWithTimestamp : t);
     } else {
-      updated = [transactionData, ...transactions];
+      // User ADDED a new transaction
+      updated = [txWithTimestamp, ...transactions];
       // Fire celebratory confetti for big sales!
       if (transactionData.type === 'INCOME' && transactionData.amount >= 5000000) {
         try {
@@ -83,8 +91,12 @@ const DashboardApp = () => {
         } catch (e) {}
       }
     }
-    setTransactions(updated);
-    saveTransactions(updated); // Save to Firebase
+
+    // Auto sort by Date & Time logic whenever a transaction is added OR edited!
+    const sortedUpdated = sortTransactionsByDateTime(updated);
+
+    setTransactions(sortedUpdated);
+    saveTransactions(sortedUpdated); // Save sorted dataset to Firebase
     setEditingTransaction(null);
   };
 

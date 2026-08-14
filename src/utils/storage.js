@@ -255,6 +255,58 @@ export const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
+// Helper to parse & sort transaction list by Date & Time
+export const sortTransactionsByDateTime = (list = [], direction = 'DESC') => {
+  if (!Array.isArray(list)) return [];
+
+  const getTs = (t) => {
+    if (!t) return 0;
+    let dateVal = t.date || '';
+    let timeVal = t.time || '00:00';
+
+    if (typeof dateVal === 'number') return dateVal;
+    if (/^\d{10,}$/.test(String(dateVal))) return Number(dateVal);
+
+    if (typeof dateVal === 'string' && dateVal.includes('/')) {
+      const parts = dateVal.split('/');
+      if (parts.length === 3) {
+        dateVal = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+
+    const normalizedTime = timeVal.length === 5 ? `${timeVal}:00` : timeVal;
+    const combined = `${dateVal}T${normalizedTime}`;
+    const ts = new Date(combined).getTime();
+    if (!isNaN(ts)) return ts;
+
+    const dateOnlyTs = new Date(dateVal).getTime();
+    if (!isNaN(dateOnlyTs)) return dateOnlyTs;
+
+    return 0;
+  };
+
+  return [...list].sort((a, b) => {
+    const tsA = getTs(a);
+    const tsB = getTs(b);
+
+    if (tsA !== tsB) {
+      return direction === 'DESC' ? tsB - tsA : tsA - tsB;
+    }
+
+    // Tie-breaker 1: updatedAt if recently edited
+    const upA = a.updatedAt || 0;
+    const upB = b.updatedAt || 0;
+    if (upA !== upB) {
+      return direction === 'DESC' ? upB - upA : upA - upB;
+    }
+
+    // Tie-breaker 2: id
+    return direction === 'DESC'
+      ? String(b.id || '').localeCompare(String(a.id || ''))
+      : String(a.id || '').localeCompare(String(a.id || ''));
+  });
+};
+
 // Reset all data on Firebase
 export const resetToFactoryDefaults = async () => {
   await dbSet('transactions', []);
