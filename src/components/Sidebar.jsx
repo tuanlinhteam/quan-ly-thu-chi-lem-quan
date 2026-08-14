@@ -88,16 +88,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onOpenAddTransaction, mobileM
             </button>
           )}
 
-          {/* Manager Info Banner */}
-          {permissions.isManager && (
-            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
-              <Lock size={18} className="text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-emerald-200">Cổng Quản Lý (Không Xóa)</p>
-                <p className="text-[11px] text-emerald-300/80 mt-0.5">Bạn có quyền Nhập Thu/Chi & Kho hải sản. Không có quyền xóa để bảo vệ dữ liệu.</p>
-              </div>
-            </div>
-          )}
+
 
           {/* Navigation Section */}
           <div>
