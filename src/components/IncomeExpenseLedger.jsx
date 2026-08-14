@@ -20,7 +20,10 @@ import {
   X,
   AlertCircle,
   Calendar,
-  Lock
+  Lock,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 export const IncomeExpenseLedger = ({ 
@@ -45,9 +48,39 @@ export const IncomeExpenseLedger = ({
   // Selected Invoice Preview Modal
   const [viewInvoiceUrl, setViewInvoiceUrl] = useState(null);
 
-  // Filtered Data Computation
+  // Sort direction: 'DESC' (mới nhất trước, mặc định) hoặc 'ASC' (cũ nhất trước)
+  const [sortDirection, setSortDirection] = useState('DESC');
+
+  // Helper to parse transaction date + time into numeric timestamp for accurate sorting
+  const getSortTimestamp = (t) => {
+    if (!t) return 0;
+    let dateVal = t.date || '';
+    let timeVal = t.time || '00:00';
+
+    if (typeof dateVal === 'number') return dateVal;
+    if (/^\d{10,}$/.test(String(dateVal))) return Number(dateVal);
+
+    if (typeof dateVal === 'string' && dateVal.includes('/')) {
+      const parts = dateVal.split('/');
+      if (parts.length === 3) {
+        dateVal = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+
+    const normalizedTime = timeVal.length === 5 ? `${timeVal}:00` : timeVal;
+    const combined = `${dateVal}T${normalizedTime}`;
+    const ts = new Date(combined).getTime();
+    if (!isNaN(ts)) return ts;
+
+    const dateOnlyTs = new Date(dateVal).getTime();
+    if (!isNaN(dateOnlyTs)) return dateOnlyTs;
+
+    return 0;
+  };
+
+  // Filtered & Auto-Sorted Data Computation
   const filteredData = useMemo(() => {
-    return transactions.filter(t => {
+    const list = transactions.filter(t => {
       // Type Filter
       if (filterType !== 'ALL' && t.type !== filterType) return false;
 
@@ -70,7 +103,22 @@ export const IncomeExpenseLedger = ({
 
       return true;
     });
-  }, [transactions, filterType, filterCategory, startDate, endDate, searchQuery]);
+
+    // Auto sort by Date & Time automatically according to sortDirection
+    return [...list].sort((a, b) => {
+      const tsA = getSortTimestamp(a);
+      const tsB = getSortTimestamp(b);
+
+      if (tsA !== tsB) {
+        return sortDirection === 'DESC' ? tsB - tsA : tsA - tsB;
+      }
+
+      // Secondary tie-breaker by ID
+      return sortDirection === 'DESC'
+        ? String(b.id || '').localeCompare(String(a.id || ''))
+        : String(a.id || '').localeCompare(String(b.id || ''));
+    });
+  }, [transactions, filterType, filterCategory, startDate, endDate, searchQuery, sortDirection]);
 
   // Paginated Subset
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
@@ -89,6 +137,7 @@ export const IncomeExpenseLedger = ({
     setFilterCategory('ALL');
     setStartDate('');
     setEndDate('');
+    setSortDirection('DESC');
     setCurrentPage(1);
   };
 
@@ -219,7 +268,26 @@ export const IncomeExpenseLedger = ({
             <thead className="bg-ocean-900/90 text-amber-300 font-bold uppercase tracking-wider border-b border-amber-500/20">
               <tr>
                 <th className="py-3.5 px-4">Loại</th>
-                <th className="py-3.5 px-4">Ngày / Giờ</th>
+                <th 
+                  className="py-3.5 px-4 cursor-pointer hover:text-amber-400 select-none transition group"
+                  onClick={() => setSortDirection(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
+                  title="Bấm để đổi chiều sắp xếp (Mới nhất / Cũ nhất)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>NGÀY / GIỜ</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30 group-hover:bg-amber-500/20 transition normal-case">
+                      {sortDirection === 'DESC' ? (
+                        <>
+                          <ArrowDown size={11} /> Mới nhất
+                        </>
+                      ) : (
+                        <>
+                          <ArrowUp size={11} /> Cũ nhất
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </th>
                 <th className="py-3.5 px-4">Danh mục</th>
                 <th className="py-3.5 px-4">Ghi chú chi tiết</th>
                 <th className="py-3.5 px-4 text-right">Số tiền (VNĐ)</th>
