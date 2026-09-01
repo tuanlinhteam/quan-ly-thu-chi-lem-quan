@@ -1,5 +1,5 @@
 import { INITIAL_TRANSACTIONS, INITIAL_INVENTORY, INITIAL_SETTINGS, DEFAULT_USERS } from './mockData';
-import { dbSet, dbListen, dbGet } from './firebase';
+import { dbSet, dbListen, dbGet, dbRemove } from './firebase';
 
 const KEYS = {
   TRANSACTIONS: 'lem_quan_transactions_v1',
@@ -13,7 +13,55 @@ const KEYS = {
 //  FIREBASE REAL-TIME SYNC LAYER
 //  All data is stored on Firebase and synced
 //  across all devices in real-time
+//  
+//  v4.0: Transactions are stored by ID key
+//  (not as a flat array) for efficient writes
 // ═══════════════════════════════════════════
+
+// Convert transactions object {tx_id: {...}, ...} to array
+const txObjectToArray = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data.filter(Boolean);
+  return Object.values(data).filter(Boolean);
+};
+
+// Migrate: array-based transactions → object-keyed by ID
+const migrateTransactionsToObjectFormat = async () => {
+  try {
+    const data = await dbGet('transactions');
+    if (!data) return;
+    
+    // If data is already an object with tx_ keys, skip
+    if (!Array.isArray(data)) {
+      const keys = Object.keys(data);
+      // Check if keys are tx_ prefixed (already migrated) or numeric (array storage)
+      const hasNonNumericKeys = keys.some(k => isNaN(Number(k)));
+      if (hasNonNumericKeys) {
+        console.log('✅ Transactions already in object format');
+        return;
+      }
+    }
+
+    // Convert array to object keyed by ID
+    const arr = Array.isArray(data) ? data : Object.values(data);
+    const txObject = {};
+    let migratedCount = 0;
+
+    for (const tx of arr) {
+      if (tx && tx.id) {
+        txObject[tx.id] = tx;
+        migratedCount++;
+      }
+    }
+
+    if (migratedCount > 0) {
+      await dbSet('transactions', txObject);
+      console.log(`✅ Migrated ${migratedCount} transactions to object format (keyed by ID)`);
+    }
+  } catch (err) {
+    console.error('Transaction format migration error:', err);
+  }
+};
 
 // Migrate old localStorage data to Firebase (one-time)
 const migrateLocalStorageToFirebase = async () => {
@@ -28,8 +76,15 @@ const migrateLocalStorageToFirebase = async () => {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firebaseTransactions = await dbGet('transactions');
         // Only migrate if Firebase is empty
-        if (!firebaseTransactions || (Array.isArray(firebaseTransactions) && firebaseTransactions.length === 0)) {
-          await dbSet('transactions', parsed);
+        if (!firebaseTransactions) {
+          // Convert to object format keyed by ID
+          const txObject = {};
+          for (const tx of parsed) {
+            if (tx && tx.id) {
+              txObject[tx.id] = tx;
+            }
+          }
+          await dbSet('transactions', txObject);
           console.log(`✅ Migrated ${parsed.length} transactions from localStorage to Firebase`);
         }
       }
@@ -71,9 +126,12 @@ export const initFirebaseData = async () => {
     // First, migrate any old localStorage data
     await migrateLocalStorageToFirebase();
 
+    // Migrate array-based transactions to object format
+    await migrateTransactionsToObjectFormat();
+
     const transactions = await dbGet('transactions');
     if (transactions === null) {
-      await dbSet('transactions', []);
+      await dbSet('transactions', {});
     }
 
     const inventory = await dbGet('inventory');
@@ -98,8 +156,11 @@ export const initFirebaseData = async () => {
 // Listen to real-time changes from Firebase
 export const listenTransactions = (callback) => {
   return dbListen('transactions', (data) => {
-    const transactions = data ? (Array.isArray(data) ? data : Object.values(data)) : [];
-    callback(transactions.filter(Boolean));
+    callback(txObjectToArray(data));
+  }, (error) => {
+    console.error('Transaction listener error:', error);
+    // Fallback: still call with empty so loading overlay goes away
+    callback([]);
   });
 };
 
@@ -107,6 +168,9 @@ export const listenInventory = (callback) => {
   return dbListen('inventory', (data) => {
     const inventory = data ? (Array.isArray(data) ? data : Object.values(data)) : [];
     callback(inventory.filter(Boolean));
+  }, (error) => {
+    console.error('Inventory listener error:', error);
+    callback([]);
   });
 };
 
@@ -120,13 +184,59 @@ export const listenUsers = (callback) => {
 export const listenSettings = (callback) => {
   return dbListen('settings', (data) => {
     callback(data || INITIAL_SETTINGS);
+  }, (error) => {
+    console.error('Settings listener error:', error);
+    callback(INITIAL_SETTINGS);
   });
 };
 
-// Save to Firebase (replaces localStorage writes)
+// ═══════════════════════════════════════════
+//  SAVE FUNCTIONS — Individual writes
+//  Instead of replacing ALL transactions every
+//  save, we now write individual records by ID.
+//  This is MUCH faster and reliable (KB vs MB).
+// ═══════════════════════════════════════════
+
+// Save a SINGLE transaction by its ID
+export const saveTransaction = async (transaction) => {
+  if (!transaction || !transaction.id) {
+    console.error('Cannot save transaction without ID');
+    return;
+  }
+  try {
+    await dbSet(`transactions/${transaction.id}`, transaction);
+  } catch (err) {
+    console.error('Error saving transaction to Firebase:', err);
+    throw err; // Let caller know it failed
+  }
+};
+
+// Delete a SINGLE transaction by ID
+export const deleteTransactionById = async (id) => {
+  if (!id) return;
+  try {
+    await dbRemove(`transactions/${id}`);
+  } catch (err) {
+    console.error('Error deleting transaction from Firebase:', err);
+    throw err;
+  }
+};
+
+// Bulk save ALL transactions (for migration/reset only)
 export const saveTransactions = async (transactions) => {
   try {
-    await dbSet('transactions', transactions);
+    if (Array.isArray(transactions)) {
+      // Convert array to object keyed by ID
+      const txObject = {};
+      for (const tx of transactions) {
+        if (tx && tx.id) {
+          txObject[tx.id] = tx;
+        }
+      }
+      await dbSet('transactions', txObject);
+    } else {
+      await dbSet('transactions', transactions);
+    }
   } catch (err) {
     console.error('Error saving transactions to Firebase:', err);
   }
@@ -160,8 +270,7 @@ export const saveSettings = async (settings) => {
 export const loadTransactions = async () => {
   try {
     const data = await dbGet('transactions');
-    if (!data) return [];
-    return Array.isArray(data) ? data : Object.values(data).filter(Boolean);
+    return txObjectToArray(data);
   } catch (err) {
     return [];
   }
@@ -309,7 +418,7 @@ export const sortTransactionsByDateTime = (list = [], direction = 'DESC') => {
 
 // Reset all data on Firebase
 export const resetToFactoryDefaults = async () => {
-  await dbSet('transactions', []);
+  await dbSet('transactions', {});
   await dbSet('inventory', []);
   await dbSet('users', DEFAULT_USERS);
   await dbSet('settings', INITIAL_SETTINGS);

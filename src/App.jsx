@@ -15,6 +15,8 @@ import {
   listenTransactions,
   listenInventory,
   listenSettings,
+  saveTransaction,
+  deleteTransactionById,
   saveTransactions, 
   saveInventory, 
   saveSettings,
@@ -66,7 +68,7 @@ const DashboardApp = () => {
   }, []);
 
   // Transaction Actions
-  const handleSaveTransaction = (transactionData) => {
+  const handleSaveTransaction = async (transactionData) => {
     const exists = transactions.some(t => t.id === transactionData.id);
     const txWithTimestamp = {
       ...transactionData,
@@ -96,18 +98,31 @@ const DashboardApp = () => {
     const sortedUpdated = sortTransactionsByDateTime(updated);
 
     setTransactions(sortedUpdated);
-    saveTransactions(sortedUpdated); // Save sorted dataset to Firebase
+    
+    // Save ONLY this single transaction (not all 16MB!)
+    try {
+      await saveTransaction(txWithTimestamp);
+    } catch (err) {
+      console.error('Failed to save transaction:', err);
+      alert('⚠️ Lỗi lưu dữ liệu! Vui lòng thử lại.');
+    }
+    
     setEditingTransaction(null);
   };
 
-  const handleDeleteTransaction = (id) => {
+  const handleDeleteTransaction = async (id) => {
     if (!permissions.canDeleteTransaction) {
       alert('Tài khoản của bạn không có quyền xóa giao dịch!');
       return;
     }
     const updated = transactions.filter(t => t.id !== id);
     setTransactions(updated);
-    saveTransactions(updated); // Save to Firebase
+    try {
+      await deleteTransactionById(id); // Delete single record from Firebase
+    } catch (err) {
+      console.error('Failed to delete transaction:', err);
+      alert('⚠️ Lỗi xóa dữ liệu! Vui lòng thử lại.');
+    }
   };
 
   const handleSaveInventory = (updatedInventory) => {

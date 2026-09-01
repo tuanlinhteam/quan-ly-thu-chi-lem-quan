@@ -31,10 +31,13 @@ export const dbRemove = (path) => remove(ref(db, path));
 
 export const dbUpdate = (path, data) => update(ref(db, path), data);
 
-export const dbListen = (path, callback) => {
+export const dbListen = (path, callback, errorCallback) => {
   return onValue(ref(db, path), (snapshot) => {
     const data = snapshot.exists() ? snapshot.val() : null;
     callback(data);
+  }, (error) => {
+    console.error(`Firebase listener error on "${path}":`, error);
+    if (errorCallback) errorCallback(error);
   });
 };
 
