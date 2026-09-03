@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { TRANSACTION_CATEGORIES } from '../utils/mockData';
 import { getTodayString } from '../utils/storage';
-import { X, PlusCircle, Upload, CheckCircle2, TrendingUp, TrendingDown, Image, Calendar, Tag, FileText, AlertTriangle, Lock } from 'lucide-react';
+import { compressImage } from '../utils/imageCompressor';
+import { X, PlusCircle, Upload, CheckCircle2, TrendingUp, TrendingDown, Image, Calendar, Tag, FileText, AlertTriangle, Lock, Loader2 } from 'lucide-react';
 
 export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialData = null }) => {
   const { user } = useAuth();
@@ -16,9 +17,13 @@ export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialDa
   const [invoiceUrl, setInvoiceUrl] = useState('');
   const [previewImage, setPreviewImage] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setValidationError('');
+    setIsCompressing(false);
+    setIsSubmitting(false);
     if (initialData) {
       setType(initialData.type || 'INCOME');
       setAmount(initialData.amount ? String(initialData.amount) : '');
@@ -50,17 +55,28 @@ export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialDa
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      setIsCompressing(true);
+      setValidationError('');
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setInvoiceUrl(reader.result);
-        setPreviewImage(reader.result);
-        setValidationError('');
+      reader.onloadend = async () => {
+        try {
+          // Compress image to max 1000px and 70% quality (reduces 5-10MB photo to ~60-100KB!)
+          const compressed = await compressImage(reader.result);
+          setInvoiceUrl(compressed);
+          setPreviewImage(compressed);
+        } catch (err) {
+          console.warn('Compression fallback:', err);
+          setInvoiceUrl(reader.result);
+          setPreviewImage(reader.result);
+        } finally {
+          setIsCompressing(false);
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setValidationError('');
 
@@ -76,25 +92,34 @@ export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialDa
       return;
     }
 
-    const catList = type === 'INCOME' ? TRANSACTION_CATEGORIES.INCOME : TRANSACTION_CATEGORIES.EXPENSE;
-    const catObj = catList.find(c => c.id === category) || catList[0];
+    setIsSubmitting(true);
 
-    const transactionData = {
-      id: initialData?.id || `tx_${Date.now()}`,
-      type,
-      amount: numAmount,
-      category: catObj.id,
-      categoryName: catObj.name,
-      date,
-      time,
-      note: note.trim() || catObj.name,
-      createdByName: user?.name || 'Tài khoản Lem Quán',
-      createdByRole: user?.role || 'MANAGER',
-      invoiceUrl: invoiceUrl
-    };
+    try {
+      const catList = type === 'INCOME' ? TRANSACTION_CATEGORIES.INCOME : TRANSACTION_CATEGORIES.EXPENSE;
+      const catObj = catList.find(c => c.id === category) || catList[0];
 
-    onSaveTransaction(transactionData);
-    onClose();
+      const transactionData = {
+        id: initialData?.id || `tx_${Date.now()}`,
+        type,
+        amount: numAmount,
+        category: catObj.id,
+        categoryName: catObj.name,
+        date,
+        time,
+        note: note.trim() || catObj.name,
+        createdByName: user?.name || 'Tài khoản Lem Quán',
+        createdByRole: user?.role || 'MANAGER',
+        invoiceUrl: invoiceUrl
+      };
+
+      await onSaveTransaction(transactionData);
+      onClose();
+    } catch (err) {
+      console.error('Submit transaction error:', err);
+      setValidationError('⚠️ Không thể kết nối Firebase để lưu. Vui lòng kiểm tra lại mạng!');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -257,14 +282,19 @@ export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialDa
             
             <div className="flex items-center gap-3">
               <label className={`flex-1 cursor-pointer p-3.5 rounded-xl bg-ocean-950 border border-dashed transition flex items-center justify-center gap-2 ${isInvoiceMissing ? 'border-red-500/60 hover:border-red-400' : 'border-emerald-500/60'}`}>
-                <Upload size={18} className={isInvoiceMissing ? 'text-red-400' : 'text-emerald-400'} />
+                {isCompressing ? (
+                  <Loader2 size={18} className="text-amber-400 animate-spin" />
+                ) : (
+                  <Upload size={18} className={isInvoiceMissing ? 'text-red-400' : 'text-emerald-400'} />
+                )}
                 <span className={`font-bold text-xs ${isInvoiceMissing ? 'text-red-300' : 'text-emerald-300'}`}>
-                  {previewImage ? 'Thay đổi ảnh hóa đơn' : 'BẤM VÀO ĐÂY ĐỂ TẢI ẢNH HÓA ĐƠN *'}
+                  {isCompressing ? 'Đang nén tối ưu dung lượng ảnh...' : (previewImage ? 'Thay đổi ảnh hóa đơn' : 'BẤM VÀO ĐÂY ĐỂ TẢI ẢNH HÓA ĐƠN *')}
                 </span>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleImageUpload}
+                  disabled={isCompressing || isSubmitting}
                   className="hidden"
                 />
               </label>
@@ -274,6 +304,7 @@ export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialDa
                   <img src={previewImage} alt="Hóa đơn" className="w-full h-full object-cover" />
                   <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={() => { setInvoiceUrl(''); setPreviewImage(''); }}
                     className="absolute inset-0 bg-red-950/80 text-red-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-[10px] font-bold"
                   >
@@ -295,6 +326,7 @@ export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialDa
             <button
               type="button"
               onClick={onClose}
+              disabled={isSubmitting}
               className="px-5 py-2.5 rounded-xl bg-ocean-900 text-slate-300 text-xs font-bold border border-slate-700 hover:bg-ocean-800 transition"
             >
               Hủy Bỏ
@@ -302,15 +334,29 @@ export const TransactionModal = ({ isOpen, onClose, onSaveTransaction, initialDa
 
             <button
               type="submit"
-              disabled={isInvoiceMissing}
+              disabled={isInvoiceMissing || isCompressing || isSubmitting}
               className={`px-6 py-2.5 rounded-xl font-extrabold text-xs shadow-lg transition flex items-center gap-2 ${
-                isInvoiceMissing 
+                isInvoiceMissing || isCompressing || isSubmitting
                   ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60' 
                   : 'gold-gradient-bg text-slate-950 shadow-amber-500/25 hover:shadow-amber-500/40'
               }`}
             >
-              {isInvoiceMissing ? <Lock size={14} /> : <CheckCircle2 size={16} />}
-              <span>{isInvoiceMissing ? 'KHÓA LƯU (THIẾU HÓA ĐƠN)' : (initialData ? 'CẬP NHẬT GIAO DỊCH' : 'LƯU GIAO DỊCH')}</span>
+              {isSubmitting ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : isInvoiceMissing ? (
+                <Lock size={14} />
+              ) : (
+                <CheckCircle2 size={16} />
+              )}
+              <span>
+                {isSubmitting
+                  ? 'ĐANG LƯU DỮ LIỆU... ⏳'
+                  : isCompressing
+                  ? 'ĐANG NÉN ẢNH...'
+                  : isInvoiceMissing
+                  ? 'KHÓA LƯU (THIẾU HÓA ĐƠN)'
+                  : (initialData ? 'CẬP NHẬT GIAO DỊCH' : 'LƯU GIAO DỊCH')}
+              </span>
             </button>
           </div>
         </form>

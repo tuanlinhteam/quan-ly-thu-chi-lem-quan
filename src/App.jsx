@@ -104,7 +104,8 @@ const DashboardApp = () => {
       await saveTransaction(txWithTimestamp);
     } catch (err) {
       console.error('Failed to save transaction:', err);
-      alert('⚠️ Lỗi lưu dữ liệu! Vui lòng thử lại.');
+      alert('⚠️ Lỗi lưu dữ liệu lên hệ thống! Vui lòng thử lại.');
+      throw err;
     }
     
     setEditingTransaction(null);
