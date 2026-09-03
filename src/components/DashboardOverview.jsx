@@ -40,7 +40,7 @@ export const DashboardOverview = ({
   onOpenAddTransaction, 
   onNavigateToLedger 
 }) => {
-  const [dateFilter, setDateFilter] = useState('ALL'); // 'TODAY', 'WEEK', 'MONTH', 'SINGLE_DATE', 'CUSTOM_RANGE', 'ALL'
+  const [dateFilter, setDateFilter] = useState('MONTH'); // 'TODAY', 'WEEK', 'MONTH', 'SINGLE_DATE', 'CUSTOM_RANGE', 'ALL'
   const [singleDate, setSingleDate] = useState(getTodayString());
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
