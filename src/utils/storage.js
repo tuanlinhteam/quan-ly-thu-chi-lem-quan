@@ -25,41 +25,31 @@ const txObjectToArray = (data) => {
   return Object.values(data).filter(Boolean);
 };
 
-// Migrate: array-based transactions → object-keyed by ID
-const migrateTransactionsToObjectFormat = async () => {
+// Check if transactions need format migration (array → object keyed by ID)
+// NOTE: Full migration was done via CLI script (migrate-transactions.cjs)
+// This only handles small edge cases (e.g., leftover numeric keys)
+const checkTransactionFormat = async () => {
   try {
     const data = await dbGet('transactions');
-    if (!data) return;
+    if (!data || Array.isArray(data)) return;
     
-    // If data is already an object with tx_ keys, skip
-    if (!Array.isArray(data)) {
-      const keys = Object.keys(data);
-      // Check if keys are tx_ prefixed (already migrated) or numeric (array storage)
-      const hasNonNumericKeys = keys.some(k => isNaN(Number(k)));
-      if (hasNonNumericKeys) {
-        console.log('✅ Transactions already in object format');
-        return;
+    const keys = Object.keys(data);
+    const numericKeys = keys.filter(k => !isNaN(Number(k)));
+    
+    if (numericKeys.length > 0) {
+      // Migrate remaining numeric keys one by one (not bulk!)
+      console.log(`🔄 Migrating ${numericKeys.length} remaining numeric keys...`);
+      for (const numKey of numericKeys) {
+        const tx = data[numKey];
+        if (tx && tx.id) {
+          await dbSet(`transactions/${tx.id}`, tx);
+          await dbRemove(`transactions/${numKey}`);
+        }
       }
-    }
-
-    // Convert array to object keyed by ID
-    const arr = Array.isArray(data) ? data : Object.values(data);
-    const txObject = {};
-    let migratedCount = 0;
-
-    for (const tx of arr) {
-      if (tx && tx.id) {
-        txObject[tx.id] = tx;
-        migratedCount++;
-      }
-    }
-
-    if (migratedCount > 0) {
-      await dbSet('transactions', txObject);
-      console.log(`✅ Migrated ${migratedCount} transactions to object format (keyed by ID)`);
+      console.log('✅ Remaining numeric keys migrated');
     }
   } catch (err) {
-    console.error('Transaction format migration error:', err);
+    console.error('Transaction format check error:', err);
   }
 };
 
@@ -126,8 +116,8 @@ export const initFirebaseData = async () => {
     // First, migrate any old localStorage data
     await migrateLocalStorageToFirebase();
 
-    // Migrate array-based transactions to object format
-    await migrateTransactionsToObjectFormat();
+    // Check for any remaining numeric-key transactions and fix incrementally
+    await checkTransactionFormat();
 
     const transactions = await dbGet('transactions');
     if (transactions === null) {
