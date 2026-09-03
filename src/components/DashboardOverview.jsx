@@ -63,7 +63,8 @@ export const DashboardOverview = ({
         return diffDays <= 7;
       }
       if (dateFilter === 'MONTH') {
-        return t.date.startsWith(now.toISOString().slice(0, 7));
+        const currentMonthStr = getTodayString().slice(0, 7);
+        return t.date && t.date.startsWith(currentMonthStr);
       }
       if (dateFilter === 'SINGLE_DATE') {
         return t.date === (singleDate || todayStr);
