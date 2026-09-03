@@ -248,7 +248,7 @@ export const LoginModal = ({ isOpen, onClose }) => {
 
         {/* Footer */}
         <p className="text-center text-[10px] text-slate-500 mt-5">
-          Cổng quản trị toàn quyền • LEM QUÁN v2.5
+          Cổng quản trị toàn quyền • LEM QUÁN v3.3.4
         </p>
       </div>
     </div>

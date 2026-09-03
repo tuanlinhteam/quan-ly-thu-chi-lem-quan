@@ -138,7 +138,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onOpenAddTransaction, mobileM
         <div className="pt-4 border-t border-slate-800/80 space-y-3">
           <div className="p-3 rounded-xl bg-ocean-900/40 border border-amber-500/10 text-slate-400 text-xs">
             <div className="flex items-center justify-between mb-1">
-              <span className="font-bold text-slate-200">LEM QUÁN v2.5</span>
+              <span className="font-bold text-slate-200">LEM QUÁN v3.3.4</span>
               <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Online</span>
             </div>
             <p className="text-[11px] text-slate-500">Hệ thống Admin & Quản Lý Thu Chi</p>
